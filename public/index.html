@@ -10,6 +10,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <script>
+    // Apply the saved theme before first paint (default: light).
+    (function () {
+      var t = "light";
+      try { t = localStorage.getItem("songforge.theme") || "light"; } catch (e) {}
+      if (["light", "dark", "system"].indexOf(t) < 0) t = "light";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
 </head>
 <body>
   <div class="glow" aria-hidden="true"></div>
@@ -22,6 +31,11 @@
       <span>SongForge</span>
     </div>
     <div class="topbar-right">
+      <div class="theme-switch" role="group" aria-label="Theme">
+        <button type="button" data-theme-choice="light" aria-pressed="false" title="Light theme">☀️<span class="t-label">Light</span></button>
+        <button type="button" data-theme-choice="system" aria-pressed="false" title="Match your device">💻<span class="t-label">System</span></button>
+        <button type="button" data-theme-choice="dark" aria-pressed="false" title="Dark theme">🌙<span class="t-label">Dark</span></button>
+      </div>
       <span id="credits" class="pill" title="Remaining SunoAPI credits">Credits: —</span>
       <button id="passcodeBtn" class="pill pill-btn hidden" type="button">🔒 Passcode</button>
     </div>

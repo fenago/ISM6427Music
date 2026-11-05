@@ -373,7 +373,25 @@ function addChips(container, items, onPick) {
   });
 }
 
+/* ---------- theme ---------- */
+const THEME_KEY = "songforge.theme";
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  document.querySelectorAll("[data-theme-choice]").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.themeChoice === theme)));
+}
+function initTheme() {
+  applyTheme(document.documentElement.getAttribute("data-theme") || "light");
+  document.querySelectorAll("[data-theme-choice]").forEach((b) => {
+    b.onclick = () => {
+      applyTheme(b.dataset.themeChoice);
+      try { localStorage.setItem(THEME_KEY, b.dataset.themeChoice); } catch { /* ignore */ }
+    };
+  });
+}
+
 function init() {
+  initTheme();
   document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => setMode(t.dataset.mode)));
   $("#form").addEventListener("submit", onSubmit);
   $("#instrumental").addEventListener("change", syncInstrumental);
