@@ -20,6 +20,7 @@ A web app that lets anyone generate full songs with AI, powered by [SunoAPI.org]
 | `GET /api/status?taskId=` | Poll a song | `GET /api/v1/generate/record-info` |
 | `POST /api/lyrics`, `GET /api/lyrics?taskId=` | AI lyrics | `/api/v1/lyrics`, `/api/v1/lyrics/record-info` |
 | `GET /api/credits` | Remaining credits | `GET /api/v1/generate/credit` |
+| `GET /api/health` | Setup check — is the key set and accepted? | credit check on each host |
 | `POST /api/callback` | Required webhook target (acknowledged; app polls) | — |
 
 ## Deploy on Netlify
