@@ -14,11 +14,17 @@ const HOSTS = [
 // Clean up common copy/paste mistakes in the Netlify env var:
 // surrounding quotes, whitespace/newlines, or a pasted "Bearer " prefix.
 export function getKey() {
-  return (process.env.SUNO_API_KEY || "")
+  const cleaned = (process.env.SUNO_API_KEY || "")
     .trim()
     .replace(/^["']|["']$/g, "")
     .replace(/^Bearer\s+/i, "")
     .trim();
+  // If a whole sentence/paragraph was pasted, pull out the 32-char hex key inside it.
+  if (/\s/.test(cleaned) || cleaned.length > 64) {
+    const match = cleaned.match(/\b[a-f0-9]{32}\b/i);
+    if (match) return match[0];
+  }
+  return cleaned;
 }
 
 let workingHost = null; // remembered per warm function instance
