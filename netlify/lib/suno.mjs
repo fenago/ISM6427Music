@@ -2,7 +2,26 @@
 // The API key lives only in the SUNO_API_KEY environment variable on Netlify
 // and is never sent to the browser.
 
-const BASE = (process.env.SUNO_API_BASE || "https://api.sunoapi.org").replace(/\/+$/, "");
+// SunoAPI documents two hosts; try the configured/primary one, then the alternate.
+const HOSTS = [
+  ...(process.env.SUNO_API_BASE ? [process.env.SUNO_API_BASE] : []),
+  "https://api.sunoapi.org",
+  "https://apibox.erweima.ai",
+]
+  .map((h) => h.trim().replace(/\/+$/, ""))
+  .filter((h, i, a) => h && a.indexOf(h) === i);
+
+// Clean up common copy/paste mistakes in the Netlify env var:
+// surrounding quotes, whitespace/newlines, or a pasted "Bearer " prefix.
+export function getKey() {
+  return (process.env.SUNO_API_KEY || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+}
+
+let workingHost = null; // remembered per warm function instance
 
 export function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -41,14 +60,9 @@ const CODE_MESSAGES = {
   500: "SunoAPI server error.",
 };
 
-export async function suno(path, { method = "GET", body, query } = {}) {
-  const key = process.env.SUNO_API_KEY;
-  if (!key) {
-    return { ok: false, status: 500, error: "SUNO_API_KEY is not configured on the server." };
-  }
-  const url = new URL(BASE + path);
+async function callHost(host, key, path, { method = "GET", body, query } = {}) {
+  const url = new URL(host + path);
   if (query) for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
-
   let res;
   try {
     res = await fetch(url, {
@@ -61,16 +75,14 @@ export async function suno(path, { method = "GET", body, query } = {}) {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (e) {
-    return { ok: false, status: 502, error: `Could not reach SunoAPI: ${e.message}` };
+    return { ok: false, status: 502, network: true, error: `Could not reach SunoAPI: ${e.message}` };
   }
-
   let payload;
   try {
     payload = await res.json();
   } catch {
     return { ok: false, status: 502, error: `SunoAPI returned a non-JSON response (HTTP ${res.status}).` };
   }
-
   if (payload?.code !== 200) {
     const code = payload?.code ?? res.status;
     return {
@@ -79,5 +91,52 @@ export async function suno(path, { method = "GET", body, query } = {}) {
       error: payload?.msg || CODE_MESSAGES[code] || `SunoAPI error ${code}`,
     };
   }
-  return { ok: true, data: payload.data };
+  return { ok: true, data: payload.data, host };
+}
+
+export async function suno(path, opts = {}) {
+  const key = getKey();
+  if (!key) {
+    return { ok: false, status: 500, error: "SUNO_API_KEY is not configured on the server." };
+  }
+  const order = workingHost ? [workingHost, ...HOSTS.filter((h) => h !== workingHost)] : HOSTS;
+  let first;
+  for (const host of order) {
+    const r = await callHost(host, key, path, opts);
+    if (r.ok) {
+      workingHost = host;
+      return r;
+    }
+    first ??= r;
+    // Only fall through to the next host on auth/network problems; real errors
+    // (bad params, no credits) must not be retried, or we could double-generate.
+    if (!(r.status === 401 || r.network)) return r;
+  }
+  if (first.status === 401) {
+    first.error =
+      "SunoAPI rejected the API key. Check SUNO_API_KEY on Netlify (no quotes or spaces), " +
+      "make sure the key is active at sunoapi.org/api-key, then redeploy.";
+  }
+  return first;
+}
+
+// Used by /api/health: which hosts accept the key (read-only credit check).
+export async function diagnose() {
+  const key = getKey();
+  const raw = process.env.SUNO_API_KEY || "";
+  const results = [];
+  if (key) {
+    for (const host of HOSTS) {
+      const r = await callHost(host, key, "/api/v1/generate/credit");
+      results.push({ host, ok: r.ok, status: r.ok ? 200 : r.status, message: r.ok ? `credits: ${r.data}` : r.error });
+    }
+  }
+  return {
+    keyConfigured: Boolean(key),
+    keyLength: key.length,
+    keyEndsWith: key ? key.slice(-4) : null,
+    rawValueNeededCleanup: raw !== key,
+    passcodeEnabled: Boolean(process.env.APP_PASSCODE),
+    hosts: results,
+  };
 }
